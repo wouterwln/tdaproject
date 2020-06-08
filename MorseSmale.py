@@ -165,6 +165,9 @@ class MorseSmaleComplex:
         Adds a boundary of infinity values and makes sure that adjacent values are not equal
         :return: the prepared terrain
         """
+        slope = (np.mean(self.terrain[:, 1]) - np.mean(self.terrain[:, -2])) / self.terrain.shape[1] - 2
+        for i in range(1, self.terrain.shape[1] - 1):
+            self.terrain[:, i] += slope * i
         for i in range(len(self.terrain)):
             self.terrain[i, 0] = math.inf
             self.terrain[i, len(self.terrain[i]) - 1] = math.inf
