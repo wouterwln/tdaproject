@@ -3,6 +3,7 @@ import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 
+
 class Complex:
     def __init__(self, terrain, critical_points, persistence):
         self.terrain = terrain
@@ -24,7 +25,7 @@ class Complex:
         for side in ascending_components:
             trajectory = [np.array(saddle)]
             point = saddle
-            surrounding = self.get_surrounding(point[0], point[1])
+            surrounding = self.get_surrounding(point[0], point[1], replacement=-math.inf)
             steepest_ascent = (1, 1)
             for coordinate in side:
                 if surrounding[coordinate] > surrounding[steepest_ascent]:
@@ -36,7 +37,7 @@ class Complex:
                     trajectory.append(np.array((0, 0)))
                     point = tuple(trajectory[-1])
                     break
-                surrounding = self.get_surrounding(point[0], point[1])
+                surrounding = self.get_surrounding(point[0], point[1], replacement=-math.inf)
                 steepest_ascent = np.unravel_index(np.argmax(surrounding, axis=None), surrounding.shape)
                 trajectory.append(np.array(point) + np.array(steepest_ascent) + np.array([-1, -1]))
                 point = tuple(trajectory[-1])
@@ -65,9 +66,9 @@ class Complex:
         return trajectories
 
     def get_connected_components(self, saddle, ascending=True):
-        to_check = {(0, 0): [(1, 0), (0, 1)], (0, 1): [(0, 0), (0, 2)], (0, 2): [(0, 1), (1, 2)],
-                    (1, 0): [(0, 0), (2, 0)],
-                    (1, 2): [(0, 2), (2, 2)], (2, 0): [(1, 0), (2, 1)], (2, 1): [(2, 0), (2, 2)],
+        to_check = {(0, 0): [(1, 0), (0, 1)], (0, 1): [(0, 0), (1, 2)],
+                    (1, 0): [(0, 0), (2, 1)],
+                    (1, 2): [(0, 1), (2, 2)], (2, 1): [(1, 0), (2, 2)],
                     (2, 2): [(1, 2), (2, 1)]}
         surrounding = self.get_surrounding(saddle[0], saddle[1])
         connected_components = []
@@ -75,29 +76,28 @@ class Complex:
             surrounding = surrounding > surrounding[1][1]
         else:
             surrounding = surrounding < surrounding[1][1]
-        for i in range(3):
-            for j in range(3):
-                present = False
-                if i is not 1 or j is not 1:
-                    if surrounding[i, j]:
-                        for component in connected_components:
-                            if (i, j) in component:
-                                present = True
-                                break
-                        if not present:
-                            connected_components.append([(i, j)])
-                            connected = True
-                            while connected:
-                                connected = False
-                                for element in connected_components[-1]:
-                                    for neighbor in to_check[element]:
-                                        if surrounding[neighbor]:
-                                            if neighbor not in connected_components[-1]:
-                                                connected_components[-1].append(neighbor)
-                                                connected = True
+        for c, v in to_check.items():
+            present = False
+
+            if surrounding[c]:
+                for component in connected_components:
+                    if c in component:
+                        present = True
+                        break
+                if not present:
+                    connected_components.append([c])
+                    connected = True
+                    while connected:
+                        connected = False
+                        for element in connected_components[-1]:
+                            for neighbor in to_check[element]:
+                                if surrounding[neighbor]:
+                                    if neighbor not in connected_components[-1]:
+                                        connected_components[-1].append(neighbor)
+                                        connected = True
         return connected_components
 
-    def get_surrounding(self, i, j, include_self=True):
+    def get_surrounding(self, i, j, include_self=True, replacement=np.inf):
         """
         Retrieves the surrounding of (i,j) in the terrain
         :param i: first coordinate
@@ -106,6 +106,8 @@ class Complex:
         :return: the surrounding of point (i,j)
         """
         surrounding = np.copy(self.terrain[i - 1:i + 2, j - 1:j + 2])
+        surrounding[0, 2] = replacement
+        surrounding[2, 0] = replacement
         if not include_self:
             surrounding[1, 1] = np.nan
         return surrounding
@@ -119,7 +121,7 @@ class AscendingComplex(Complex):
             persistence_pairs = []
             self.cell_boundaries = []
             for s in self.saddles:
-                boundaries = self.steepest_descent_trajectory(saddle=s)
+                boundaries = self.steepest_ascent_trajectory(saddle=s)
                 for boundary in boundaries:
                     self.cell_boundaries.append((s, boundary))
             for boundary in self.cell_boundaries:
@@ -135,7 +137,7 @@ class DescendingComplex(Complex):
             persistence_pairs = []
             self.cell_boundaries = []
             for s in self.saddles:
-                boundaries = self.steepest_ascent_trajectory(saddle=s)
+                boundaries = self.steepest_descent_trajectory(saddle=s)
                 for boundary in boundaries:
                     self.cell_boundaries.append((s, boundary))
             for boundary in self.cell_boundaries:
@@ -192,23 +194,21 @@ class MorseSmaleComplex:
         return new_terrain
 
     def is_critical(self, i, j):
-        to_check = {(0, 0): [(1, 0), (0, 1)], (0, 1): [(0, 0), (0, 2)], (0, 2): [(0, 1), (1, 2)],
-                    (1, 0): [(0, 0), (2, 0)],
-                    (1, 2): [(0, 2), (2, 2)], (2, 0): [(1, 0), (2, 1)], (2, 1): [(2, 0), (2, 2)],
+        to_check = {(0, 0): [(1, 0), (0, 1)], (0, 1): [(0, 0), (1, 2)],
+                    (1, 0): [(0, 0), (2, 1)],
+                    (1, 2): [(0, 1), (2, 2)], (2, 1): [(1, 0), (2, 2)],
                     (2, 2): [(1, 2), (2, 1)]}
         surrounding = self.get_surrounding(i, j)
         surrounding = surrounding > surrounding[1, 1]
         false_boundaries = 0
         false_found = False
 
-        for i in range(3):
-            for j in range(3):
-                if not i is 1 or not j is 1:
-                    if not surrounding[i, j]:
-                        false_found = True
-                        for neighbor in to_check[(i, j)]:
-                            if surrounding[neighbor]:
-                                false_boundaries += 1
+        for c, v in to_check.items():
+            if not surrounding[c]:
+                false_found = True
+                for neighbor in v:
+                    if surrounding[neighbor]:
+                        false_boundaries += 1
         return false_boundaries, false_found
 
     def get_surrounding(self, i, j, include_self=True):
@@ -220,6 +220,7 @@ class MorseSmaleComplex:
         :return: the surrounding of point (i,j)
         """
         surrounding = np.copy(self.terrain[i - 1:i + 2, j - 1:j + 2])
+
         if not include_self:
             surrounding[1, 1] = np.nan
         return surrounding
@@ -244,25 +245,29 @@ class MorseSmaleComplex:
                     monkeys.append((i, j))
         return maxima, minima, saddles, monkeys
 
-    def plot(self):
-        plt.figure(figsize=(100, 10), dpi=100)
+    def plot(self, filename, show_plot=False):
+
         plt.imshow(self.terrain[1:self.terrain.shape[0] - 1, 1: self.terrain.shape[1] - 1])
 
         for path in self.descending_complex.cell_boundaries:
             x, y = self.reformat_path(path)
             plt.plot(x - 1, y - 1, c="w")
-        for path in self.ascending_complex.cell_boundaries:
-            x, y = self.reformat_path(path)
-            plt.plot(x - 1, y - 1, c="w")
+        #for path in self.ascending_complex.cell_boundaries:
+        #    x, y = self.reformat_path(path)
+        #    plt.plot(x - 1, y - 1, c="w")
 
         maxima = self.reformat_extreme_values(self.critical_points[0])
         minima = self.reformat_extreme_values(self.critical_points[1])
         saddles = self.reformat_extreme_values(self.critical_points[2])
-        plt.scatter(maxima[1] - 1, maxima[0] - 1, c="red", marker=",")
-        plt.scatter(minima[1] - 1, minima[0] - 1, c="blue", marker=",")
-        plt.scatter(saddles[1] - 1, saddles[0] - 1, c="yellow", marker=",")
-        plt.savefig("ms_smoothed.png", dpi=100)
-        plt.show()
+        try:
+            plt.scatter(maxima[1] - 1, maxima[0] - 1, c="red", marker=",")
+            plt.scatter(minima[1] - 1, minima[0] - 1, c="blue", marker=",")
+            plt.scatter(saddles[1] - 1, saddles[0] - 1, c="yellow", marker=",")
+            plt.savefig(filename, dpi=100)
+            if show_plot:
+                plt.show()
+        except:
+            pass
 
     @staticmethod
     def reformat_extreme_values(extreme_values):
