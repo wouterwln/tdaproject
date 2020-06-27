@@ -2,6 +2,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
+import cv2
 
 
 class Complex:
@@ -149,7 +150,10 @@ class MorseSmaleComplex:
     def __init__(self, terrain, scaling=1, persistence=0):
 
         self._old_terrain = terrain
-        self.terrain = gaussian_filter(self.scale_terrain(terrain, scaling), sigma=2)
+        # no filtering, old filter, new filter
+        # self.terrain = self.scale_terrain(terrain, scaling)
+        # self.terrain = gaussian_filter(self.scale_terrain(terrain, scaling), sigma=2)
+        self.terrain = cv2.GaussianBlur(self.scale_terrain(terrain, scaling), (45, 45), 0)
 
         self._prepare_terrain()
         print("Terrain Prepared")
@@ -246,6 +250,13 @@ class MorseSmaleComplex:
                     saddles.append((i, j))
                 if connected_components > 2:
                     monkeys.append((i, j))
+
+        for saddle1 in saddles:
+            for saddle2 in saddles:
+                dist = np.abs(saddle1[0] - saddle2[0]) + np.abs(saddle1[1] - saddle2[1])
+                if (dist > 0) & (dist < 25):
+                    saddles.remove(saddle2)
+
         return maxima, minima, saddles, monkeys
 
     def plot(self, filename, show_plot=False):
@@ -262,6 +273,20 @@ class MorseSmaleComplex:
         maxima = self.reformat_extreme_values(self.critical_points[0])
         minima = self.reformat_extreme_values(self.critical_points[1])
         saddles = self.reformat_extreme_values(self.critical_points[2])
+
+        print("number of minima, maxima and saddles: ", len(minima[0]), len(maxima[0]), len(saddles[0]))
+
+#        for maximum1 in maxima:
+#            for maximum2 in maxima:
+#                dist = np.abs(maximum1[0] - maximum2[0]) + np.abs(maximum1[1] - maximum2[1])
+#                if (dist > 0) & (dist < p / 2):
+#                    np.delete(maxima, maximum1)
+
+#       for minimum1 in minima:
+#          for minimum2 in minima:
+#                dist = np.abs(minimum1[0] - minimum2[0]) + np.abs(minimum1[1] - minimum2[1])
+#                if (dist > 0) & (dist < p / 2):
+#                    np.delete(minima, minimum2)
         try:
             plt.scatter(maxima[1] - 1, maxima[0] - 1, c="red", marker=",")
             plt.scatter(minima[1] - 1, minima[0] - 1, c="blue", marker=",")

@@ -10,7 +10,9 @@ for i, frame in enumerate(river_height_data):
     if i == 400:
         plt.figure(figsize=(100, 10), dpi=100)
         ms = MorseSmaleComplex(frame, 1)
-        ms.plot("output/desc_frame_{}.png".format(i))
+        ms.plot("./output/desc_unfiltered_{}.png".format(i))
+        plt.savefig("./output/desc_unfiltered_{}.png".format(i))
+        plt.show()
         plt.clf()
         print("Frame {} written".format(i))
 
